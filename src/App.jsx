@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const BASE_URL = "https://1test-60069775150.development.catalystserverless.in/server/1_test_function/"; // 🔁 replace this
+const BASE_URL = "https://1test-60069775150.development.catalystserverless.in/server/1_test_function/";
 
 function App() {
   const [users, setUsers] = useState([]);
@@ -10,47 +10,59 @@ function App() {
     contact: ""
   });
 
-  // Fetch users
+  // ✅ Fetch users
   const fetchUsers = async () => {
-    const res = await fetch(BASE_URL);
-    const data = await res.json();
-    setUsers(data);
+    try {
+      const res = await fetch(BASE_URL);
+      const data = await res.json();
+      setUsers(data);
+    } catch (err) {
+      console.error("Fetch error:", err);
+    }
   };
 
   useEffect(() => {
     fetchUsers();
   }, []);
 
-  // Handle input
+  // ✅ Handle input
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  // Add user
+  // ✅ Add user (CORS FIX APPLIED)
   const addUser = async () => {
-    await fetch(BASE_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(form)
-    });
+    try {
+      await fetch(BASE_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain"   // 🔥 avoids preflight
+        },
+        body: JSON.stringify(form)
+      });
 
-    setForm({ name: "", email: "", contact: "" });
-    fetchUsers();
+      setForm({ name: "", email: "", contact: "" });
+      fetchUsers();
+    } catch (err) {
+      console.error("Add error:", err);
+    }
   };
 
-  // Delete user
+  // ✅ Delete user (also updated)
   const deleteUser = async (id) => {
-    await fetch(BASE_URL, {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ ROWID: id })
-    });
+    try {
+      await fetch(BASE_URL, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "text/plain"   // 🔥 avoid preflight
+        },
+        body: JSON.stringify({ ROWID: id })
+      });
 
-    fetchUsers();
+      fetchUsers();
+    } catch (err) {
+      console.error("Delete error:", err);
+    }
   };
 
   return (
@@ -58,40 +70,47 @@ function App() {
       <h1>User CRUD App</h1>
 
       {/* Form */}
-      <input
-        name="name"
-        placeholder="Name"
-        value={form.name}
-        onChange={handleChange}
-      />
-      <input
-        name="email"
-        placeholder="Email"
-        value={form.email}
-        onChange={handleChange}
-      />
-      <input
-        name="contact"
-        placeholder="Contact"
-        value={form.contact}
-        onChange={handleChange}
-      />
-      <button onClick={addUser}>Add User</button>
+      <div style={{ marginBottom: "20px" }}>
+        <input
+          name="name"
+          placeholder="Name"
+          value={form.name}
+          onChange={handleChange}
+        />
+        <input
+          name="email"
+          placeholder="Email"
+          value={form.email}
+          onChange={handleChange}
+        />
+        <input
+          name="contact"
+          placeholder="Contact"
+          value={form.contact}
+          onChange={handleChange}
+        />
+        <button onClick={addUser}>Add User</button>
+      </div>
 
       <hr />
 
-      {/* List */}
-      {users.map((user) => (
-        <div key={user.ROWID} style={{ margin: "10px 0" }}>
-          <b>{user.name}</b> | {user.email} | {user.contact}
-          <button
-            onClick={() => deleteUser(user.ROWID)}
-            style={{ marginLeft: "10px" }}
-          >
-            Delete
-          </button>
-        </div>
-      ))}
+      {/* User List */}
+      <h2>Users</h2>
+      {users.length === 0 ? (
+        <p>No users found</p>
+      ) : (
+        users.map((user) => (
+          <div key={user.ROWID} style={{ margin: "10px 0" }}>
+            <b>{user.name}</b> | {user.email} | {user.contact}
+            <button
+              onClick={() => deleteUser(user.ROWID)}
+              style={{ marginLeft: "10px" }}
+            >
+              Delete
+            </button>
+          </div>
+        ))
+      )}
     </div>
   );
 }
