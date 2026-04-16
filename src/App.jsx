@@ -35,9 +35,6 @@ function App() {
     try {
       await fetch(BASE_URL, {
         method: "POST",
-        headers: {
-          "Content-Type": "text/plain"   // 🔥 avoids preflight
-        },
         body: JSON.stringify(form)
       });
 
