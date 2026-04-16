@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const BASE_URL = "https://1test-60069775150.development.catalystserverless.in/server/1_test_function/";
+const BASE_URL = "/server/1_test_function";
 
 function App() {
   const [users, setUsers] = useState([]);
