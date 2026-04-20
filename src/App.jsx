@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import "./App.css";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/users";
+const DEFAULT_API_BASE_URL =
+  "https://new-test-60069775150.development.catalystserverless.in/server/backend/api/users";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL;
 const emptyForm = {
   ROWID: "",
   name: "",
@@ -11,10 +13,17 @@ const emptyForm = {
 
 const requestJson = async (url, options = {}) => {
   const response = await fetch(url, options);
-  const data = await response.json();
+  const text = await response.text();
+  let data;
 
-  if (!response.ok || data.error) {
-    throw new Error(data.details || data.error || "Request failed");
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    throw new Error(`Expected JSON from ${url}, but received a non-JSON response.`);
+  }
+
+  if (!response.ok || data?.error) {
+    throw new Error(data?.details || data?.error || "Request failed");
   }
 
   return data;
