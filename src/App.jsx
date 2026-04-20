@@ -4,9 +4,6 @@ import "./App.css";
 const DEFAULT_API_BASE_URL =
   "https://new-test-60069775150.development.catalystserverless.in/server/backend/api/users";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL;
-const AUTH_BASE_URL =
-  import.meta.env.VITE_AUTH_BASE_URL || API_BASE_URL.replace(/\/api\/users\/?$/, "/api/auth");
-const TOKEN_STORAGE_KEY = "catalyst_user_crud_token";
 const emptyForm = {
   ROWID: "",
   name: "",
@@ -33,8 +30,6 @@ const requestJson = async (url, options = {}) => {
 };
 
 function App() {
-  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_STORAGE_KEY) || "");
-  const [loginForm, setLoginForm] = useState({ username: "", password: "" });
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
@@ -42,69 +37,24 @@ function App() {
   const [error, setError] = useState("");
 
   const isEditing = Boolean(form.ROWID);
-  const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_STORAGE_KEY);
-    setToken("");
-    setUsers([]);
-    setForm(emptyForm);
-  }, []);
 
   const fetchUsers = useCallback(async () => {
-    if (!token) {
-      return;
-    }
-
     setLoading(true);
     setError("");
 
     try {
-      const data = await requestJson(API_BASE_URL, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const data = await requestJson(API_BASE_URL);
       setUsers(Array.isArray(data) ? data : []);
     } catch (err) {
       setError(err.message);
-
-      if (err.message.toLowerCase().includes("token")) {
-        logout();
-      }
     } finally {
       setLoading(false);
     }
-  }, [logout, token]);
+  }, []);
 
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
-
-  const handleLoginChange = (event) => {
-    const { name, value } = event.target;
-    setLoginForm((currentForm) => ({ ...currentForm, [name]: value }));
-  };
-
-  const login = async (event) => {
-    event.preventDefault();
-    setSaving(true);
-    setError("");
-
-    try {
-      const data = await requestJson(`${AUTH_BASE_URL}/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "text/plain"
-        },
-        body: JSON.stringify(loginForm)
-      });
-
-      localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
-      setToken(data.token);
-      setLoginForm({ username: "", password: "" });
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -134,7 +84,6 @@ function App() {
       await requestJson(API_BASE_URL, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "text/plain"
         },
         body: JSON.stringify(payload)
@@ -165,7 +114,6 @@ function App() {
       await requestJson(API_BASE_URL, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "text/plain"
         },
         body: JSON.stringify({ action: "delete", ROWID: rowId })
@@ -181,42 +129,6 @@ function App() {
     }
   };
 
-  if (!token) {
-    return (
-      <main className="app-shell auth-shell">
-        <section className="toolbar">
-          <div>
-            <p className="eyebrow">Catalyst Datastore</p>
-            <h1>Sign In</h1>
-          </div>
-        </section>
-
-        {error && <p className="status error">{error}</p>}
-
-        <form className="login-form" onSubmit={login}>
-          <input
-            name="username"
-            placeholder="Username"
-            value={loginForm.username}
-            onChange={handleLoginChange}
-            required
-          />
-          <input
-            name="password"
-            placeholder="Password"
-            type="password"
-            value={loginForm.password}
-            onChange={handleLoginChange}
-            required
-          />
-          <button className="primary-button" type="submit" disabled={saving}>
-            {saving ? "Signing In" : "Sign In"}
-          </button>
-        </form>
-      </main>
-    );
-  }
-
   return (
     <main className="app-shell">
       <section className="toolbar">
@@ -227,9 +139,6 @@ function App() {
         <div className="toolbar-actions">
           <button className="secondary-button" type="button" onClick={fetchUsers} disabled={loading}>
             {loading ? "Loading" : "Refresh"}
-          </button>
-          <button className="secondary-button" type="button" onClick={logout}>
-            Logout
           </button>
         </div>
       </section>
