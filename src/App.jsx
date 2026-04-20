@@ -7,9 +7,6 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL;
 const AUTH_BASE_URL =
   import.meta.env.VITE_AUTH_BASE_URL || API_BASE_URL.replace(/\/api\/users\/?$/, "/api/auth");
 const TOKEN_STORAGE_KEY = "catalyst_user_crud_token";
-// Catalyst validates the standard `Authorization` header at the gateway layer.
-// Use a custom header for app-level tokens so requests reach our function.
-const AUTH_HEADER_NAME = "X-Auth-Token";
 const emptyForm = {
   ROWID: "",
   name: "",
@@ -62,7 +59,7 @@ function App() {
 
     try {
       const data = await requestJson(API_BASE_URL, {
-        headers: { [AUTH_HEADER_NAME]: token }
+        headers: { Authorization: `Bearer ${token}` }
       });
       setUsers(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -137,7 +134,7 @@ function App() {
       await requestJson(API_BASE_URL, {
         method: "POST",
         headers: {
-          [AUTH_HEADER_NAME]: token,
+          Authorization: `Bearer ${token}`,
           "Content-Type": "text/plain"
         },
         body: JSON.stringify(payload)
@@ -168,7 +165,7 @@ function App() {
       await requestJson(API_BASE_URL, {
         method: "POST",
         headers: {
-          [AUTH_HEADER_NAME]: token,
+          Authorization: `Bearer ${token}`,
           "Content-Type": "text/plain"
         },
         body: JSON.stringify({ action: "delete", ROWID: rowId })
