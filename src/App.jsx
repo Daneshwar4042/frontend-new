@@ -1,262 +1,181 @@
-// import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import "./App.css";
 
-// const BASE_URL = "https://1test-60069775150.development.catalystserverless.in/server/1_test_function/";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/users";
+const emptyForm = {
+  ROWID: "",
+  name: "",
+  email: "",
+  contact: ""
+};
 
-// function App() {
-//   const [users, setUsers] = useState([]);
-//   const [form, setForm] = useState({
-//     name: "",
-//     email: "",
-//     contact: ""
-//   });
+const requestJson = async (url, options = {}) => {
+  const response = await fetch(url, options);
+  const data = await response.json();
 
-//   // ✅ Fetch users
-//   const fetchUsers = async () => {
-//     try {
-//       const res = await fetch(BASE_URL);
-//       const data = await res.json();
-//       setUsers(data);
-//     } catch (err) {
-//       console.error("Fetch error:", err);
-//     }
-//   };
+  if (!response.ok || data.error) {
+    throw new Error(data.details || data.error || "Request failed");
+  }
 
-//   useEffect(() => {
-//     fetchUsers();
-//   }, []);
-
-//   // ✅ Handle input
-//   const handleChange = (e) => {
-//     setForm({ ...form, [e.target.name]: e.target.value });
-//   };
-
-//   // ✅ Add user (CORS FIX APPLIED)
-//   const addUser = async () => {
-//     try {
-//       await fetch(BASE_URL, {
-//         method: "POST",
-//         body: JSON.stringify(form)
-//       });
-
-//       setForm({ name: "", email: "", contact: "" });
-//       fetchUsers();
-//     } catch (err) {
-//       console.error("Add error:", err);
-//     }
-//   };
-
-//   // ✅ Delete user (also updated)
-//   const deleteUser = async (id) => {
-//     try {
-//       await fetch(BASE_URL, {
-//         method: "DELETE",
-//         headers: {
-//           "Content-Type": "text/plain"   // 🔥 avoid preflight
-//         },
-//         body: JSON.stringify({ ROWID: id })
-//       });
-
-//       fetchUsers();
-//     } catch (err) {
-//       console.error("Delete error:", err);
-//     }
-//   };
-
-//   return (
-//     <div style={{ padding: "20px" }}>
-//       <h1>User CRUD App</h1>
-
-//       {/* Form */}
-//       <div style={{ marginBottom: "20px" }}>
-//         <input
-//           name="name"
-//           placeholder="Name"
-//           value={form.name}
-//           onChange={handleChange}
-//         />
-//         <input
-//           name="email"
-//           placeholder="Email"
-//           value={form.email}
-//           onChange={handleChange}
-//         />
-//         <input
-//           name="contact"
-//           placeholder="Contact"
-//           value={form.contact}
-//           onChange={handleChange}
-//         />
-//         <button onClick={addUser}>Add User</button>
-//       </div>
-
-//       <hr />
-
-//       {/* User List */}
-//       <h2>Users</h2>
-//       {users.length === 0 ? (
-//         <p>No users found</p>
-//       ) : (
-//         users.map((user) => (
-//           <div key={user.ROWID} style={{ margin: "10px 0" }}>
-//             <b>{user.name}</b> | {user.email} | {user.contact}
-//             <button
-//               onClick={() => deleteUser(user.ROWID)}
-//               style={{ marginLeft: "10px" }}
-//             >
-//               Delete
-//             </button>
-//           </div>
-//         ))
-//       )}
-//     </div>
-//   );
-// }
-
-// export default App;
-
-
-
-
-import { useEffect, useState } from "react";
-
-const BASE_URL = "https://1test-60069775150.development.catalystserverless.in/server/1_test_function";
+  return data;
+};
 
 function App() {
   const [users, setUsers] = useState([]);
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    contact: ""
-  });
+  const [form, setForm] = useState(emptyForm);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
-  // ✅ Fetch users
-  const fetchUsers = async () => {
+  const isEditing = Boolean(form.ROWID);
+
+  const fetchUsers = useCallback(async () => {
+    setLoading(true);
+    setError("");
+
     try {
-      const res = await fetch(BASE_URL);
-      const data = await res.json();
-
-      if (data.error) {
-        console.error("Backend error:", data.error);
-        return;
-      }
-
-      setUsers(data);
+      const data = await requestJson(API_BASE_URL);
+      setUsers(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error("Fetch error:", err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [fetchUsers]);
 
-  // ✅ Handle input
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setForm((currentForm) => ({ ...currentForm, [name]: value }));
   };
 
-  // ✅ Add user (FIXED)
-  const addUser = async () => {
-    try {
-      console.log("Sending:", form); // debug
+  const resetForm = () => {
+    setForm(emptyForm);
+  };
 
-      const res = await fetch(BASE_URL, {
+  const saveUser = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+
+    const payload = {
+      name: form.name.trim(),
+      email: form.email.trim(),
+      contact: form.contact.trim()
+    };
+
+    if (isEditing) {
+      payload.ROWID = form.ROWID;
+    }
+
+    try {
+      await requestJson(API_BASE_URL, {
         method: "POST",
         headers: {
-          "Content-Type": "text/plain" // 🔥 important for your backend
+          "Content-Type": "text/plain"
         },
-        body: JSON.stringify(form)
+        body: JSON.stringify(payload)
       });
 
-      const data = await res.json();
-
-      if (data.error) {
-        console.error("Add failed:", data.error);
-        return;
-      }
-
-      setForm({ name: "", email: "", contact: "" });
-      fetchUsers();
-
+      resetForm();
+      await fetchUsers();
     } catch (err) {
-      console.error("Add error:", err);
+      setError(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
-  // ✅ Delete user (FIXED)
-  const deleteUser = async (id) => {
-    try {
-      console.log("Deleting:", id); // debug
+  const editUser = (user) => {
+    setForm({
+      ROWID: user.ROWID || "",
+      name: user.name || "",
+      email: user.email || "",
+      contact: user.contact || ""
+    });
+  };
 
-      const res = await fetch(BASE_URL, {
+  const deleteUser = async (rowId) => {
+    setError("");
+
+    try {
+      await requestJson(API_BASE_URL, {
         method: "DELETE",
         headers: {
           "Content-Type": "text/plain"
         },
-        body: JSON.stringify({ ROWID: id })
+        body: JSON.stringify({ ROWID: rowId })
       });
 
-      const data = await res.json();
-
-      if (data.error) {
-        console.error("Delete failed:", data.error);
-        return;
+      if (form.ROWID === rowId) {
+        resetForm();
       }
 
-      fetchUsers();
-
+      await fetchUsers();
     } catch (err) {
-      console.error("Delete error:", err);
+      setError(err.message);
     }
   };
 
   return (
-    <div style={{ padding: "20px" }}>
-      <h1>User CRUD App</h1>
+    <main className="app-shell">
+      <section className="toolbar">
+        <div>
+          <p className="eyebrow">Catalyst Datastore</p>
+          <h1>User CRUD</h1>
+        </div>
+        <button className="secondary-button" type="button" onClick={fetchUsers} disabled={loading}>
+          {loading ? "Loading" : "Refresh"}
+        </button>
+      </section>
 
-      {/* Form */}
-      <div style={{ marginBottom: "20px" }}>
-        <input
-          name="name"
-          placeholder="Name"
-          value={form.name}
-          onChange={handleChange}
-        />
-        <input
-          name="email"
-          placeholder="Email"
-          value={form.email}
-          onChange={handleChange}
-        />
-        <input
-          name="contact"
-          placeholder="Contact"
-          value={form.contact}
-          onChange={handleChange}
-        />
-        <button onClick={addUser}>Add User</button>
-      </div>
+      {error && <p className="status error">{error}</p>}
 
-      <hr />
+      <form className="user-form" onSubmit={saveUser}>
+        <input name="name" placeholder="Name" value={form.name} onChange={handleChange} required />
+        <input name="email" placeholder="Email" value={form.email} onChange={handleChange} required />
+        <input name="contact" placeholder="Contact" value={form.contact} onChange={handleChange} required />
+        <button className="primary-button" type="submit" disabled={saving}>
+          {saving ? "Saving" : isEditing ? "Update User" : "Add User"}
+        </button>
+        {isEditing && (
+          <button className="secondary-button" type="button" onClick={resetForm}>
+            Cancel
+          </button>
+        )}
+      </form>
 
-      {/* User List */}
-      <h2>Users</h2>
-      {users.length === 0 ? (
-        <p>No users found</p>
-      ) : (
-        users.map((user) => (
-          <div key={user.ROWID} style={{ margin: "10px 0" }}>
-            <b>{user.name}</b> | {user.email} | {user.contact}
-            <button
-              onClick={() => deleteUser(user.ROWID)}
-              style={{ marginLeft: "10px" }}
-            >
-              Delete
-            </button>
-          </div>
-        ))
-      )}
-    </div>
+      <section className="user-list">
+        <h2>Users</h2>
+
+        {loading && <p className="status">Fetching users...</p>}
+
+        {!loading && users.length === 0 ? (
+          <p className="status">No users found.</p>
+        ) : (
+          users.map((user) => (
+            <article className="user-row" key={user.ROWID}>
+              <div>
+                <strong>{user.name}</strong>
+                <p>{user.email}</p>
+                <p>{user.contact}</p>
+              </div>
+              <div className="row-actions">
+                <button className="secondary-button" type="button" onClick={() => editUser(user)}>
+                  Edit
+                </button>
+                <button className="danger-button" type="button" onClick={() => deleteUser(user.ROWID)}>
+                  Delete
+                </button>
+              </div>
+            </article>
+          ))
+        )}
+      </section>
+    </main>
   );
 }
 
