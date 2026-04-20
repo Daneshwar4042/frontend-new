@@ -111,12 +111,12 @@ function App() {
     setError("");
 
     try {
-      await requestJson(`${API_BASE_URL}/delete`, {
+      await requestJson(API_BASE_URL, {
         method: "POST",
         headers: {
           "Content-Type": "text/plain"
         },
-        body: JSON.stringify({ ROWID: rowId })
+        body: JSON.stringify({ action: "delete", ROWID: rowId })
       });
 
       if (form.ROWID === rowId) {
