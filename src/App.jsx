@@ -111,8 +111,8 @@ function App() {
     setError("");
 
     try {
-      await requestJson(API_BASE_URL, {
-        method: "DELETE",
+      await requestJson(`${API_BASE_URL}/delete`, {
+        method: "POST",
         headers: {
           "Content-Type": "text/plain"
         },
