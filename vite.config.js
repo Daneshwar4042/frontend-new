@@ -18,5 +18,14 @@ export default defineConfig({
   base: './',   // REQUIRED for Catalyst
   build: {
     outDir: 'dist'
+  },
+  server: {
+    proxy: {
+      '/server/backend': {
+        target: 'https://new-test-60069775150.development.catalystserverless.in',
+        changeOrigin: true,
+        secure: true
+      }
+    }
   }
 })
