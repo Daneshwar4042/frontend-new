@@ -28,6 +28,30 @@
   color: var(--muted);
 }
 
+.hero-actions,
+.auth-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.auth-card {
+  min-height: 280px;
+  align-items: center;
+}
+
+.text-link {
+  color: var(--heading);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.text-link:hover {
+  text-decoration: underline;
+}
+
 .eyebrow {
   margin: 0 0 8px;
   color: var(--accent);
@@ -206,8 +230,16 @@ button:disabled {
     align-items: stretch;
   }
 
+  .hero-actions,
+  .auth-actions {
+    justify-content: stretch;
+  }
+
   .form-actions button,
-  .row-actions button {
+  .row-actions button,
+  .hero-actions button,
+  .auth-actions button,
+  .auth-actions .text-link {
     flex: 1 1 100%;
   }
 }

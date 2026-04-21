@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
 import "./App.css";
+import {
+  CATALYST_LOGIN_PATH,
+  isCatalystSdkAvailable,
+  signInWithCatalyst,
+  signOutFromCatalyst
+} from "./lib/catalyst-auth";
 
 const emptyForm = {
   ROWID: "",
@@ -9,6 +15,8 @@ const emptyForm = {
 };
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "/server/backend/api/users").replace(/\/$/, "");
+const API_ROOT = API_BASE_URL.replace(/\/api\/users\/?$/, "");
+const AUTH_ME_URL = `${API_ROOT}/api/auth/me`;
 
 const requestJson = async (url, options = {}) => {
   const response = await fetch(url, {
@@ -31,7 +39,9 @@ const requestJson = async (url, options = {}) => {
   }
 
   if (!response.ok) {
-    throw new Error(data?.details || data?.error || "Request failed");
+    const requestError = new Error(data?.details || data?.error || "Request failed");
+    requestError.status = response.status;
+    throw requestError;
   }
 
   return data;
@@ -40,12 +50,25 @@ const requestJson = async (url, options = {}) => {
 function App() {
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState(emptyForm);
-  const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
 
   const isEditing = Boolean(form.ROWID);
+
+  const handleSessionExpired = (requestError) => {
+    if (requestError?.status === 401) {
+      setCurrentUser(null);
+      setUsers([]);
+      setStatus("");
+      return true;
+    }
+
+    return false;
+  };
 
   const loadUsers = async () => {
     setLoading(true);
@@ -55,14 +78,36 @@ function App() {
       const data = await requestJson(API_BASE_URL);
       setUsers(Array.isArray(data) ? data : []);
     } catch (requestError) {
-      setError(requestError.message);
+      if (!handleSessionExpired(requestError)) {
+        setError(requestError.message);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadUsers();
+    const bootstrap = async () => {
+      setAuthLoading(true);
+      setError("");
+
+      try {
+        const response = await requestJson(AUTH_ME_URL);
+        setCurrentUser(response?.user || null);
+        await loadUsers();
+      } catch (requestError) {
+        if (requestError?.status === 401) {
+          setCurrentUser(null);
+          setUsers([]);
+        } else {
+          setError(requestError.message);
+        }
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+
+    bootstrap();
   }, []);
 
   const handleChange = (event) => {
@@ -93,7 +138,6 @@ function App() {
           method: "PUT",
           body: JSON.stringify(payload)
         });
-        setStatus("User updated successfully.");
       } else {
         await requestJson(API_BASE_URL, {
           method: "POST",
@@ -105,7 +149,9 @@ function App() {
       await loadUsers();
       setStatus(isEditing ? "User updated successfully." : "User created successfully.");
     } catch (requestError) {
-      setError(requestError.message);
+      if (!handleSessionExpired(requestError)) {
+        setError(requestError.message);
+      }
     } finally {
       setSaving(false);
     }
@@ -135,12 +181,61 @@ function App() {
         resetForm();
       }
 
-      setStatus("User deleted successfully.");
       await loadUsers();
+      setStatus("User deleted successfully.");
     } catch (requestError) {
-      setError(requestError.message);
+      if (!handleSessionExpired(requestError)) {
+        setError(requestError.message);
+      }
     }
   };
+
+  if (authLoading) {
+    return (
+      <main className="app-shell">
+        <section className="hero-card auth-card">
+          <div>
+            <p className="eyebrow">Zoho Catalyst</p>
+            <h1>Checking your session</h1>
+            <p className="hero-copy">Verifying the current Catalyst login before loading the users table.</p>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <main className="app-shell">
+        <section className="hero-card auth-card">
+          <div>
+            <p className="eyebrow">Zoho Catalyst Authentication</p>
+            <h1>Sign in to continue</h1>
+            <p className="hero-copy">
+              This CRUD app now uses Catalyst’s built-in authentication. Deploy the client on Catalyst, enable Hosted
+              Authentication in the console, and sign in before accessing the
+              <code> users </code>
+              table.
+            </p>
+            {!isCatalystSdkAvailable() && (
+              <p className="status">
+                The Catalyst Web SDK is available only when this client is served from Catalyst Web Client Hosting.
+              </p>
+            )}
+            {error && <p className="status error">{error}</p>}
+          </div>
+          <div className="auth-actions">
+            <button className="primary-button" type="button" onClick={signInWithCatalyst}>
+              Sign in with Catalyst
+            </button>
+            <a className="text-link" href={CATALYST_LOGIN_PATH}>
+              Open hosted login
+            </a>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="app-shell">
@@ -149,14 +244,21 @@ function App() {
           <p className="eyebrow">Zoho Catalyst</p>
           <h1>Users CRUD</h1>
           <p className="hero-copy">
-            The frontend now talks directly to your Catalyst Advanced I/O function, which reads and writes the
-            <code> users </code>
-            table.
+            Signed in as
+            <code> {currentUser.email_id} </code>
+            with the role
+            <code> {currentUser.role_name || "App User"} </code>
+            . The frontend and backend are now protected by Catalyst built-in authentication.
           </p>
         </div>
-        <button className="secondary-button" type="button" onClick={loadUsers} disabled={loading}>
-          {loading ? "Refreshing..." : "Refresh data"}
-        </button>
+        <div className="hero-actions">
+          <button className="secondary-button" type="button" onClick={loadUsers} disabled={loading}>
+            {loading ? "Refreshing..." : "Refresh data"}
+          </button>
+          <button className="secondary-button" type="button" onClick={signOutFromCatalyst}>
+            Sign out
+          </button>
+        </div>
       </section>
 
       <section className="content-grid">
