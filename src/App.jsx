@@ -1,12 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
 
-const DEFAULT_API_BASE_URL =
-  "https://new-test-60069775150.development.catalystserverless.in/server/backend/api/users";
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL;
-const API_ROOT = API_BASE_URL.replace(/\/api\/users\/?$/, "");
-const AUTH_LOGIN_URL = `${API_ROOT}/api/auth/login`;
-const TOKEN_STORAGE_KEY = "crud_token";
 const emptyForm = {
   ROWID: "",
   name: "",
@@ -14,22 +8,29 @@ const emptyForm = {
   contact: ""
 };
 
-const requestJson = async (url, options = {}, token) => {
-  const headers = {
-    ...(options.headers || {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {})
-  };
-  const response = await fetch(url, { ...options, headers });
-  const text = await response.text();
-  let data;
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "/server/backend/api/users").replace(/\/$/, "");
 
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    throw new Error(`Expected JSON from ${url}, but received a non-JSON response.`);
+const requestJson = async (url, options = {}) => {
+  const response = await fetch(url, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    },
+    ...options
+  });
+
+  const text = await response.text();
+  let data = null;
+
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch (_error) {
+      throw new Error(`Expected JSON from ${url}, but received a non-JSON response.`);
+    }
   }
 
-  if (!response.ok || data?.error) {
+  if (!response.ok) {
     throw new Error(data?.details || data?.error || "Request failed");
   }
 
@@ -39,97 +40,46 @@ const requestJson = async (url, options = {}, token) => {
 function App() {
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState(emptyForm);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_STORAGE_KEY) || "");
-  const [loginForm, setLoginForm] = useState({
-    email: "admin@example.com",
-    password: "admin"
-  });
-  const [loggingIn, setLoggingIn] = useState(false);
+  const [status, setStatus] = useState("");
 
   const isEditing = Boolean(form.ROWID);
 
-  const fetchUsers = useCallback(async () => {
+  const loadUsers = async () => {
     setLoading(true);
     setError("");
 
     try {
-      const data = await requestJson(API_BASE_URL, {}, token);
+      const data = await requestJson(API_BASE_URL);
       setUsers(Array.isArray(data) ? data : []);
-    } catch (err) {
-      setError(err.message);
+    } catch (requestError) {
+      setError(requestError.message);
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  };
 
   useEffect(() => {
-    if (token) {
-      fetchUsers();
-    } else {
-      setUsers([]);
-    }
-  }, [fetchUsers, token]);
+    loadUsers();
+  }, []);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
     setForm((currentForm) => ({ ...currentForm, [name]: value }));
   };
 
-  const handleLoginChange = (event) => {
-    const { name, value } = event.target;
-    setLoginForm((current) => ({ ...current, [name]: value }));
-  };
-
   const resetForm = () => {
     setForm(emptyForm);
-  };
-
-  const logout = () => {
-    localStorage.removeItem(TOKEN_STORAGE_KEY);
-    setToken("");
-    setError("");
-    resetForm();
-    setUsers([]);
-  };
-
-  const login = async (event) => {
-    event.preventDefault();
-    setLoggingIn(true);
-    setError("");
-
-    try {
-      const data = await requestJson(AUTH_LOGIN_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          email: loginForm.email.trim(),
-          password: loginForm.password
-        })
-      });
-
-      const nextToken = data?.token || "";
-      if (!nextToken) {
-        throw new Error("Login succeeded but no token was returned.");
-      }
-
-      localStorage.setItem(TOKEN_STORAGE_KEY, nextToken);
-      setToken(nextToken);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoggingIn(false);
-    }
+    setStatus("");
   };
 
   const saveUser = async (event) => {
     event.preventDefault();
     setSaving(true);
     setError("");
+    setStatus("");
 
     const payload = {
       name: form.name.trim(),
@@ -137,23 +87,25 @@ function App() {
       contact: form.contact.trim()
     };
 
-    if (isEditing) {
-      payload.ROWID = form.ROWID;
-    }
-
     try {
-      await requestJson(API_BASE_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "text/plain"
-        },
-        body: JSON.stringify(payload)
-      }, token);
+      if (isEditing) {
+        await requestJson(`${API_BASE_URL}/${form.ROWID}`, {
+          method: "PUT",
+          body: JSON.stringify(payload)
+        });
+        setStatus("User updated successfully.");
+      } else {
+        await requestJson(API_BASE_URL, {
+          method: "POST",
+          body: JSON.stringify(payload)
+        });
+      }
 
       resetForm();
-      await fetchUsers();
-    } catch (err) {
-      setError(err.message);
+      await loadUsers();
+      setStatus(isEditing ? "User updated successfully." : "User created successfully.");
+    } catch (requestError) {
+      setError(requestError.message);
     } finally {
       setSaving(false);
     }
@@ -166,130 +118,116 @@ function App() {
       email: user.email || "",
       contact: user.contact || ""
     });
+    setStatus(`Editing ${user.name || "user"}.`);
+    setError("");
   };
 
   const deleteUser = async (rowId) => {
     setError("");
+    setStatus("");
 
     try {
-      await requestJson(API_BASE_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "text/plain"
-        },
-        body: JSON.stringify({ action: "delete", ROWID: rowId })
-      }, token);
+      await requestJson(`${API_BASE_URL}/${rowId}`, {
+        method: "DELETE"
+      });
 
       if (form.ROWID === rowId) {
         resetForm();
       }
 
-      await fetchUsers();
-    } catch (err) {
-      setError(err.message);
+      setStatus("User deleted successfully.");
+      await loadUsers();
+    } catch (requestError) {
+      setError(requestError.message);
     }
   };
 
-  if (!token) {
-    return (
-      <main className="app-shell auth-shell">
-        <section className="toolbar">
-          <div>
-            <p className="eyebrow">Catalyst Datastore</p>
-            <h1>Login</h1>
-          </div>
-        </section>
-
-        {error && <p className="status error">{error}</p>}
-
-        <form className="login-form" onSubmit={login}>
-          <input
-            name="email"
-            placeholder="Email"
-            value={loginForm.email}
-            onChange={handleLoginChange}
-            autoComplete="username"
-            required
-          />
-          <input
-            name="password"
-            placeholder="Password"
-            value={loginForm.password}
-            onChange={handleLoginChange}
-            type="password"
-            autoComplete="current-password"
-            required
-          />
-          <button className="primary-button" type="submit" disabled={loggingIn}>
-            {loggingIn ? "Signing in..." : "Sign in"}
-          </button>
-          <p className="status">
-            Default dev login: <code>admin@example.com</code> / <code>admin</code>
-          </p>
-        </form>
-      </main>
-    );
-  }
-
   return (
     <main className="app-shell">
-      <section className="toolbar">
+      <section className="hero-card">
         <div>
-          <p className="eyebrow">Catalyst Datastore</p>
-          <h1>User CRUD</h1>
+          <p className="eyebrow">Zoho Catalyst</p>
+          <h1>Users CRUD</h1>
+          <p className="hero-copy">
+            The frontend now talks directly to your Catalyst Advanced I/O function, which reads and writes the
+            <code> users </code>
+            table.
+          </p>
         </div>
-        <div className="toolbar-actions">
-          <button className="secondary-button" type="button" onClick={fetchUsers} disabled={loading}>
-            {loading ? "Loading" : "Refresh"}
-          </button>
-          <button className="secondary-button" type="button" onClick={logout}>
-            Logout
-          </button>
-        </div>
+        <button className="secondary-button" type="button" onClick={loadUsers} disabled={loading}>
+          {loading ? "Refreshing..." : "Refresh data"}
+        </button>
       </section>
 
-      {error && <p className="status error">{error}</p>}
+      <section className="content-grid">
+        <form className="panel user-form" onSubmit={saveUser}>
+          <div className="panel-heading">
+            <h2>{isEditing ? "Update user" : "Add user"}</h2>
+            <p>{isEditing ? "Save changes back to Catalyst." : "Create a new row in the users table."}</p>
+          </div>
 
-      <form className="user-form" onSubmit={saveUser}>
-        <input name="name" placeholder="Name" value={form.name} onChange={handleChange} required />
-        <input name="email" placeholder="Email" value={form.email} onChange={handleChange} required />
-        <input name="contact" placeholder="Contact" value={form.contact} onChange={handleChange} required />
-        <button className="primary-button" type="submit" disabled={saving}>
-          {saving ? "Saving" : isEditing ? "Update User" : "Add User"}
-        </button>
-        {isEditing && (
-          <button className="secondary-button" type="button" onClick={resetForm}>
-            Cancel
-          </button>
-        )}
-      </form>
+          <label>
+            <span>Name</span>
+            <input name="name" placeholder="Jane Doe" value={form.name} onChange={handleChange} required />
+          </label>
 
-      <section className="user-list">
-        <h2>Users</h2>
+          <label>
+            <span>Email</span>
+            <input name="email" placeholder="jane@example.com" value={form.email} onChange={handleChange} required />
+          </label>
 
-        {loading && <p className="status">Fetching users...</p>}
+          <label>
+            <span>Contact</span>
+            <input name="contact" placeholder="+91 98765 43210" value={form.contact} onChange={handleChange} required />
+          </label>
 
-        {!loading && users.length === 0 ? (
-          <p className="status">No users found.</p>
-        ) : (
-          users.map((user) => (
-            <article className="user-row" key={user.ROWID}>
-              <div>
-                <strong>{user.name}</strong>
-                <p>{user.email}</p>
-                <p>{user.contact}</p>
-              </div>
-              <div className="row-actions">
-                <button className="secondary-button" type="button" onClick={() => editUser(user)}>
-                  Edit
-                </button>
-                <button className="danger-button" type="button" onClick={() => deleteUser(user.ROWID)}>
-                  Delete
-                </button>
-              </div>
-            </article>
-          ))
-        )}
+          <div className="form-actions">
+            <button className="primary-button" type="submit" disabled={saving}>
+              {saving ? "Saving..." : isEditing ? "Update user" : "Add user"}
+            </button>
+            {isEditing && (
+              <button className="secondary-button" type="button" onClick={resetForm}>
+                Cancel
+              </button>
+            )}
+          </div>
+
+          {error && <p className="status error">{error}</p>}
+          {!error && status && <p className="status success">{status}</p>}
+        </form>
+
+        <section className="panel user-list">
+          <div className="panel-heading">
+            <h2>Users table</h2>
+            <p>{loading ? "Loading rows from Catalyst..." : `${users.length} record${users.length === 1 ? "" : "s"} loaded.`}</p>
+          </div>
+
+          {loading ? (
+            <p className="status">Fetching users...</p>
+          ) : users.length === 0 ? (
+            <p className="status">No users found in the Catalyst table yet.</p>
+          ) : (
+            users.map((user) => (
+              <article className="user-row" key={user.ROWID}>
+                <div className="user-copy">
+                  <strong>{user.name}</strong>
+                  <p>{user.email}</p>
+                  <p>{user.contact}</p>
+                  <small>ROWID: {user.ROWID}</small>
+                </div>
+
+                <div className="row-actions">
+                  <button className="secondary-button" type="button" onClick={() => editUser(user)}>
+                    Edit
+                  </button>
+                  <button className="danger-button" type="button" onClick={() => deleteUser(user.ROWID)}>
+                    Delete
+                  </button>
+                </div>
+              </article>
+            ))
+          )}
+        </section>
       </section>
     </main>
   );
