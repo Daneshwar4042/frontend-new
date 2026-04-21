@@ -1,0 +1,10 @@
+{
+  "webclient": {
+    "rewrites": [
+      {
+        "source": "/*",
+        "target": "/index.html"
+      }
+    ]
+  }
+}
