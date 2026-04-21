@@ -4,6 +4,9 @@ import "./App.css";
 const DEFAULT_API_BASE_URL =
   "https://new-test-60069775150.development.catalystserverless.in/server/backend/api/users";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL;
+const API_ROOT = API_BASE_URL.replace(/\/api\/users\/?$/, "");
+const AUTH_LOGIN_URL = `${API_ROOT}/api/auth/login`;
+const TOKEN_STORAGE_KEY = "crud_token";
 const emptyForm = {
   ROWID: "",
   name: "",
@@ -11,8 +14,12 @@ const emptyForm = {
   contact: ""
 };
 
-const requestJson = async (url, options = {}) => {
-  const response = await fetch(url, options);
+const requestJson = async (url, options = {}, token) => {
+  const headers = {
+    ...(options.headers || {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  };
+  const response = await fetch(url, { ...options, headers });
   const text = await response.text();
   let data;
 
@@ -35,6 +42,12 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_STORAGE_KEY) || "");
+  const [loginForm, setLoginForm] = useState({
+    email: "admin@example.com",
+    password: "admin"
+  });
+  const [loggingIn, setLoggingIn] = useState(false);
 
   const isEditing = Boolean(form.ROWID);
 
@@ -43,26 +56,74 @@ function App() {
     setError("");
 
     try {
-      const data = await requestJson(API_BASE_URL);
+      const data = await requestJson(API_BASE_URL, {}, token);
       setUsers(Array.isArray(data) ? data : []);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [token]);
 
   useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+    if (token) {
+      fetchUsers();
+    } else {
+      setUsers([]);
+    }
+  }, [fetchUsers, token]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
     setForm((currentForm) => ({ ...currentForm, [name]: value }));
   };
 
+  const handleLoginChange = (event) => {
+    const { name, value } = event.target;
+    setLoginForm((current) => ({ ...current, [name]: value }));
+  };
+
   const resetForm = () => {
     setForm(emptyForm);
+  };
+
+  const logout = () => {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    setToken("");
+    setError("");
+    resetForm();
+    setUsers([]);
+  };
+
+  const login = async (event) => {
+    event.preventDefault();
+    setLoggingIn(true);
+    setError("");
+
+    try {
+      const data = await requestJson(AUTH_LOGIN_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          email: loginForm.email.trim(),
+          password: loginForm.password
+        })
+      });
+
+      const nextToken = data?.token || "";
+      if (!nextToken) {
+        throw new Error("Login succeeded but no token was returned.");
+      }
+
+      localStorage.setItem(TOKEN_STORAGE_KEY, nextToken);
+      setToken(nextToken);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoggingIn(false);
+    }
   };
 
   const saveUser = async (event) => {
@@ -87,7 +148,7 @@ function App() {
           "Content-Type": "text/plain"
         },
         body: JSON.stringify(payload)
-      });
+      }, token);
 
       resetForm();
       await fetchUsers();
@@ -117,7 +178,7 @@ function App() {
           "Content-Type": "text/plain"
         },
         body: JSON.stringify({ action: "delete", ROWID: rowId })
-      });
+      }, token);
 
       if (form.ROWID === rowId) {
         resetForm();
@@ -129,6 +190,47 @@ function App() {
     }
   };
 
+  if (!token) {
+    return (
+      <main className="app-shell auth-shell">
+        <section className="toolbar">
+          <div>
+            <p className="eyebrow">Catalyst Datastore</p>
+            <h1>Login</h1>
+          </div>
+        </section>
+
+        {error && <p className="status error">{error}</p>}
+
+        <form className="login-form" onSubmit={login}>
+          <input
+            name="email"
+            placeholder="Email"
+            value={loginForm.email}
+            onChange={handleLoginChange}
+            autoComplete="username"
+            required
+          />
+          <input
+            name="password"
+            placeholder="Password"
+            value={loginForm.password}
+            onChange={handleLoginChange}
+            type="password"
+            autoComplete="current-password"
+            required
+          />
+          <button className="primary-button" type="submit" disabled={loggingIn}>
+            {loggingIn ? "Signing in..." : "Sign in"}
+          </button>
+          <p className="status">
+            Default dev login: <code>admin@example.com</code> / <code>admin</code>
+          </p>
+        </form>
+      </main>
+    );
+  }
+
   return (
     <main className="app-shell">
       <section className="toolbar">
@@ -139,6 +241,9 @@ function App() {
         <div className="toolbar-actions">
           <button className="secondary-button" type="button" onClick={fetchUsers} disabled={loading}>
             {loading ? "Loading" : "Refresh"}
+          </button>
+          <button className="secondary-button" type="button" onClick={logout}>
+            Logout
           </button>
         </div>
       </section>
