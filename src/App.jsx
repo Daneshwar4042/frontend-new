@@ -34,6 +34,8 @@ const storeToken = (token) => {
 const requestJson = async (url, options = {}) => {
   const token = getStoredToken();
   const response = await fetch(url, {
+    mode: 'cors',
+    credentials: 'include',
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
