@@ -14,12 +14,14 @@ const emptyForm = {
   contact: ""
 };
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "/server/backend/api/users").replace(/\/$/, "");
+const rawApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "/server/backend/api/users").trim();
+const API_BASE_URL = rawApiBaseUrl.replace(/\/$/, "");
 const API_ROOT = API_BASE_URL.replace(/\/api\/users\/?$/, "");
 const AUTH_ME_URL = `${API_ROOT}/api/auth/me`;
 
 const requestJson = async (url, options = {}) => {
   const response = await fetch(url, {
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {})

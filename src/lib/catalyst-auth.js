@@ -3,7 +3,10 @@ export const CATALYST_LOGIN_PATH =
 
 export const getCatalyst = () => window.catalyst || null;
 
-export const getLoginUrl = () => new URL(CATALYST_LOGIN_PATH, window.location.origin).toString();
+export const getCatalystAuthOrigin = () =>
+  (import.meta.env.VITE_CATALYST_AUTH_ORIGIN || "").trim() || window.location.origin;
+
+export const getLoginUrl = () => new URL(CATALYST_LOGIN_PATH, getCatalystAuthOrigin()).toString();
 
 export const signInWithCatalyst = () => {
   window.location.assign(getLoginUrl());
