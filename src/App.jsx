@@ -1,11 +1,5 @@
 import { useEffect, useState } from "react";
 import "./App.css";
-import {
-  CATALYST_LOGIN_PATH,
-  isCatalystSdkAvailable,
-  signInWithCatalyst,
-  signOutFromCatalyst
-} from "./lib/catalyst-auth";
 
 const emptyForm = {
   ROWID: "",
@@ -18,12 +12,31 @@ const rawApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "/server/backend/api
 const API_BASE_URL = rawApiBaseUrl.replace(/\/$/, "");
 const API_ROOT = API_BASE_URL.replace(/\/api\/users\/?$/, "");
 const AUTH_ME_URL = `${API_ROOT}/api/auth/me`;
+const AUTH_TOKEN_URL = `${API_ROOT}/api/auth/token`;
+const TOKEN_STORAGE_KEY = "crud_auth_token";
+
+const getStoredToken = () => {
+  try {
+    return window.localStorage.getItem(TOKEN_STORAGE_KEY) || "";
+  } catch (_error) {
+    return "";
+  }
+};
+
+const storeToken = (token) => {
+  try {
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, token || "");
+  } catch (_error) {
+    // ignore
+  }
+};
 
 const requestJson = async (url, options = {}) => {
+  const token = getStoredToken();
   const response = await fetch(url, {
-    credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {})
     },
     ...options
@@ -54,6 +67,7 @@ function App() {
   const [form, setForm] = useState(emptyForm);
   const [currentUser, setCurrentUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [emailForToken, setEmailForToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -66,10 +80,34 @@ function App() {
       setCurrentUser(null);
       setUsers([]);
       setStatus("");
+      storeToken("");
       return true;
     }
 
     return false;
+  };
+
+  const signInWithToken = async () => {
+    setError("");
+    setStatus("");
+
+    try {
+      const response = await requestJson(AUTH_TOKEN_URL, {
+        method: "POST",
+        body: JSON.stringify({ email_id: emailForToken.trim() })
+      });
+
+      if (!response?.access_token) {
+        throw new Error("Token endpoint did not return an access token.");
+      }
+
+      storeToken(response.access_token);
+      const me = await requestJson(AUTH_ME_URL);
+      setCurrentUser(me?.user || { email_id: emailForToken.trim(), role_name: "Token User" });
+      await loadUsers();
+    } catch (requestError) {
+      setError(requestError.message);
+    }
   };
 
   const loadUsers = async () => {
@@ -211,28 +249,29 @@ function App() {
       <main className="app-shell">
         <section className="hero-card auth-card">
           <div>
-            <p className="eyebrow">Zoho Catalyst Authentication</p>
+            <p className="eyebrow">Token Authentication</p>
             <h1>Sign in to continue</h1>
             <p className="hero-copy">
-              This CRUD app now uses Catalyst’s built-in authentication. Deploy the client on Catalyst, enable Hosted
-              Authentication in the console, and sign in before accessing the
+              This CRUD app uses token-based authentication so it can run on Slate while the backend remains on Catalyst.
+              Enter your email to request a short-lived access token, then manage the
               <code> users </code>
               table.
             </p>
-            {!isCatalystSdkAvailable() && (
-              <p className="status">
-                The Catalyst Web SDK is available only when this client is served from Catalyst Web Client Hosting.
-              </p>
-            )}
             {error && <p className="status error">{error}</p>}
           </div>
           <div className="auth-actions">
-            <button className="primary-button" type="button" onClick={signInWithCatalyst}>
-              Sign in with Catalyst
+            <label className="token-login">
+              <span>Slate login (token)</span>
+              <input
+                type="email"
+                placeholder="you@example.com"
+                value={emailForToken}
+                onChange={(event) => setEmailForToken(event.target.value)}
+              />
+            </label>
+            <button className="secondary-button" type="button" onClick={signInWithToken} disabled={!emailForToken.trim()}>
+              Get token & sign in
             </button>
-            <a className="text-link" href={CATALYST_LOGIN_PATH}>
-              Open hosted login
-            </a>
           </div>
         </section>
       </main>
@@ -257,7 +296,18 @@ function App() {
           <button className="secondary-button" type="button" onClick={loadUsers} disabled={loading}>
             {loading ? "Refreshing..." : "Refresh data"}
           </button>
-          <button className="secondary-button" type="button" onClick={signOutFromCatalyst}>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => {
+              storeToken("");
+              setCurrentUser(null);
+              setUsers([]);
+              setStatus("");
+              setError("");
+              setEmailForToken("");
+            }}
+          >
             Sign out
           </button>
         </div>
