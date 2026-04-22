@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import "./App.css";
 
 const emptyForm = {
@@ -8,18 +8,19 @@ const emptyForm = {
   contact: ""
 };
 
-// Use environment variable for production, localhost for development
 const rawApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/server/backend").trim();
 const API_BASE_URL = rawApiBaseUrl.replace(/\/$/, "");
 const API_ROOT = API_BASE_URL.replace(/\/api\/users\/?$/, "");
+const USERS_API_URL = /\/api\/users\/?$/.test(API_BASE_URL) ? API_BASE_URL : `${API_ROOT}/api/users`;
 const AUTH_ME_URL = `${API_ROOT}/api/auth/me`;
 const AUTH_TOKEN_URL = `${API_ROOT}/api/auth/token`;
 const TOKEN_STORAGE_KEY = "crud_auth_token";
+const USERS_STORAGE_KEY = "crud_users_data";
 
 const getStoredToken = () => {
   try {
     return window.localStorage.getItem(TOKEN_STORAGE_KEY) || "";
-  } catch (_error) {
+  } catch {
     return "";
   }
 };
@@ -27,8 +28,25 @@ const getStoredToken = () => {
 const storeToken = (token) => {
   try {
     window.localStorage.setItem(TOKEN_STORAGE_KEY, token || "");
-  } catch (_error) {
-    // ignore
+  } catch {
+    // localStorage can be unavailable in private or embedded browser contexts.
+  }
+};
+
+const getStoredUsers = () => {
+  try {
+    const stored = window.localStorage.getItem(USERS_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+};
+
+const storeUsers = (users) => {
+  try {
+    window.localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users || []));
+  } catch {
+    // localStorage can be unavailable in private or embedded browser contexts.
   }
 };
 
@@ -51,7 +69,7 @@ const requestJson = async (url, options = {}) => {
   if (text) {
     try {
       data = JSON.parse(text);
-    } catch (_error) {
+    } catch {
       throw new Error(`Expected JSON from ${url}, but received a non-JSON response.`);
     }
   }
@@ -78,17 +96,39 @@ function App() {
 
   const isEditing = Boolean(form.ROWID);
 
-  const handleSessionExpired = (requestError) => {
+  const handleSessionExpired = useCallback((requestError) => {
     if (requestError?.status === 401) {
       setCurrentUser(null);
       setUsers([]);
       setStatus("");
       storeToken("");
+      storeUsers([]);
       return true;
     }
-
     return false;
-  };
+  }, []);
+
+  const loadUsers = useCallback(async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const data = await requestJson(USERS_API_URL);
+      const usersArray = Array.isArray(data) ? data : [];
+      setUsers(usersArray);
+      storeUsers(usersArray);
+    } catch (requestError) {
+      if (!handleSessionExpired(requestError)) {
+        setError(requestError.message);
+        const cachedUsers = getStoredUsers();
+        if (cachedUsers.length > 0) {
+          setUsers(cachedUsers);
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [handleSessionExpired]);
 
   const signInWithToken = async () => {
     setError("");
@@ -110,22 +150,6 @@ function App() {
       await loadUsers();
     } catch (requestError) {
       setError(requestError.message);
-    }
-  };
-
-  const loadUsers = async () => {
-    setLoading(true);
-    setError("");
-
-    try {
-      const data = await requestJson(API_BASE_URL);
-      setUsers(Array.isArray(data) ? data : []);
-    } catch (requestError) {
-      if (!handleSessionExpired(requestError)) {
-        setError(requestError.message);
-      }
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -151,7 +175,7 @@ function App() {
     };
 
     bootstrap();
-  }, []);
+  }, [loadUsers]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -177,12 +201,12 @@ function App() {
 
     try {
       if (isEditing) {
-        await requestJson(`${API_BASE_URL}/${form.ROWID}`, {
+        await requestJson(`${USERS_API_URL}/${form.ROWID}`, {
           method: "PUT",
           body: JSON.stringify(payload)
         });
       } else {
-        await requestJson(API_BASE_URL, {
+        await requestJson(USERS_API_URL, {
           method: "POST",
           body: JSON.stringify(payload)
         });
@@ -216,7 +240,7 @@ function App() {
     setStatus("");
 
     try {
-      await requestJson(`${API_BASE_URL}/${rowId}`, {
+      await requestJson(`${USERS_API_URL}/${rowId}`, {
         method: "DELETE"
       });
 
@@ -240,7 +264,7 @@ function App() {
           <div>
             <p className="eyebrow">Zoho Catalyst</p>
             <h1>Checking your session</h1>
-            <p className="hero-copy">Verifying the current Catalyst login before loading the users table.</p>
+            <p className="hero-copy">Verifying the current token before loading the users table.</p>
           </div>
         </section>
       </main>
@@ -292,7 +316,7 @@ function App() {
             <code> {currentUser.email_id} </code>
             with the role
             <code> {currentUser.role_name || "App User"} </code>
-            . The frontend and backend are now protected by Catalyst built-in authentication.
+            . The frontend and backend are protected by token-based authentication.
           </p>
         </div>
         <div className="hero-actions">
@@ -304,6 +328,7 @@ function App() {
             type="button"
             onClick={() => {
               storeToken("");
+              storeUsers([]);
               setCurrentUser(null);
               setUsers([]);
               setStatus("");
