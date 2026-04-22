@@ -8,8 +8,8 @@ const emptyForm = {
   contact: ""
 };
 
-// const rawApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "/server/backend/api/users").trim();
-const rawApiBaseUrl = "http://localhost:3000/server/backend";
+// Use environment variable for production, localhost for development
+const rawApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/server/backend").trim();
 const API_BASE_URL = rawApiBaseUrl.replace(/\/$/, "");
 const API_ROOT = API_BASE_URL.replace(/\/api\/users\/?$/, "");
 const AUTH_ME_URL = `${API_ROOT}/api/auth/me`;
