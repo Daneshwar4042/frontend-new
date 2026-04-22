@@ -89,6 +89,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [emailForToken, setEmailForToken] = useState("");
+  const [passwordForToken, setPasswordForToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -137,7 +138,10 @@ function App() {
     try {
       const response = await requestJson(AUTH_TOKEN_URL, {
         method: "POST",
-        body: JSON.stringify({ email_id: emailForToken.trim() })
+        body: JSON.stringify({
+          email_id: emailForToken.trim(),
+          password: passwordForToken
+        })
       });
 
       if (!response?.access_token) {
@@ -288,7 +292,7 @@ function App() {
           </div>
           <div className="auth-actions">
             <label className="token-login">
-              <span>Slate login (token)</span>
+              <span>Email</span>
               <input
                 type="email"
                 placeholder="you@example.com"
@@ -296,8 +300,22 @@ function App() {
                 onChange={(event) => setEmailForToken(event.target.value)}
               />
             </label>
-            <button className="secondary-button" type="button" onClick={signInWithToken} disabled={!emailForToken.trim()}>
-              Get token & sign in
+            <label className="token-login">
+              <span>Password</span>
+              <input
+                type="password"
+                placeholder="Login password"
+                value={passwordForToken}
+                onChange={(event) => setPasswordForToken(event.target.value)}
+              />
+            </label>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={signInWithToken}
+              disabled={!emailForToken.trim() || !passwordForToken}
+            >
+              Sign in
             </button>
           </div>
         </section>
@@ -334,6 +352,7 @@ function App() {
               setStatus("");
               setError("");
               setEmailForToken("");
+              setPasswordForToken("");
             }}
           >
             Sign out
