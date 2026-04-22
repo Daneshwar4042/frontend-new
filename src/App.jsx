@@ -17,6 +17,26 @@ const AUTH_TOKEN_URL = `${API_ROOT}/api/auth/token`;
 const TOKEN_STORAGE_KEY = "crud_auth_token";
 const USERS_STORAGE_KEY = "crud_users_data";
 
+const isCrossOriginApi = () => {
+  try {
+    return new URL(API_ROOT, window.location.href).origin !== window.location.origin;
+  } catch {
+    return false;
+  }
+};
+
+const parseRequestPayload = (body) => {
+  if (!body) return {};
+  if (typeof body === "string") {
+    try {
+      return JSON.parse(body);
+    } catch {
+      return {};
+    }
+  }
+  return typeof body === "object" ? body : {};
+};
+
 const getStoredToken = () => {
   try {
     return window.localStorage.getItem(TOKEN_STORAGE_KEY) || "";
@@ -52,15 +72,24 @@ const storeUsers = (users) => {
 
 const requestJson = async (url, options = {}) => {
   const token = getStoredToken();
+  const useSimpleCors = isCrossOriginApi();
+  const payload = parseRequestPayload(options.body);
+  const body = options.body && useSimpleCors
+    ? JSON.stringify(token ? { ...payload, access_token: token } : payload)
+    : options.body;
+
   const response = await fetch(url, {
     mode: 'cors',
-    credentials: 'include',
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {})
-    },
-    ...options
+    credentials: useSimpleCors ? "omit" : "include",
+    ...options,
+    headers: useSimpleCors
+      ? { "Content-Type": "text/plain" }
+      : {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(options.headers || {})
+        },
+    body
   });
 
   const text = await response.text();
@@ -114,7 +143,10 @@ function App() {
     setError("");
 
     try {
-      const data = await requestJson(USERS_API_URL);
+      const data = await requestJson(USERS_API_URL, isCrossOriginApi()
+        ? { method: "POST", body: JSON.stringify({ action: "list" }) }
+        : {}
+      );
       const usersArray = Array.isArray(data) ? data : [];
       setUsers(usersArray);
       storeUsers(usersArray);
@@ -149,7 +181,10 @@ function App() {
       }
 
       storeToken(response.access_token);
-      const me = await requestJson(AUTH_ME_URL);
+      const me = await requestJson(AUTH_ME_URL, isCrossOriginApi()
+        ? { method: "POST", body: JSON.stringify({}) }
+        : {}
+      );
       setCurrentUser(me?.user || { email_id: emailForToken.trim(), role_name: "Token User" });
       await loadUsers();
     } catch (requestError) {
@@ -163,7 +198,10 @@ function App() {
       setError("");
 
       try {
-        const response = await requestJson(AUTH_ME_URL);
+        const response = await requestJson(AUTH_ME_URL, isCrossOriginApi()
+          ? { method: "POST", body: JSON.stringify({}) }
+          : {}
+        );
         setCurrentUser(response?.user || null);
         await loadUsers();
       } catch (requestError) {
@@ -205,10 +243,17 @@ function App() {
 
     try {
       if (isEditing) {
-        await requestJson(`${USERS_API_URL}/${form.ROWID}`, {
-          method: "PUT",
-          body: JSON.stringify(payload)
-        });
+        if (isCrossOriginApi()) {
+          await requestJson(USERS_API_URL, {
+            method: "POST",
+            body: JSON.stringify({ action: "update", ROWID: form.ROWID, ...payload })
+          });
+        } else {
+          await requestJson(`${USERS_API_URL}/${form.ROWID}`, {
+            method: "PUT",
+            body: JSON.stringify(payload)
+          });
+        }
       } else {
         await requestJson(USERS_API_URL, {
           method: "POST",
@@ -244,9 +289,16 @@ function App() {
     setStatus("");
 
     try {
-      await requestJson(`${USERS_API_URL}/${rowId}`, {
-        method: "DELETE"
-      });
+      if (isCrossOriginApi()) {
+        await requestJson(USERS_API_URL, {
+          method: "POST",
+          body: JSON.stringify({ action: "delete", ROWID: rowId })
+        });
+      } else {
+        await requestJson(`${USERS_API_URL}/${rowId}`, {
+          method: "DELETE"
+        });
+      }
 
       if (form.ROWID === rowId) {
         resetForm();
