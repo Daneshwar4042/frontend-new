@@ -22,9 +22,9 @@ export default defineConfig({
   server: {
     proxy: {
       '/server/backend': {
-        target: 'https://new-test-60069775150.development.catalystserverless.in',
+        target: 'http://localhost:3000',
         changeOrigin: true,
-        secure: true
+        secure: false
       }
     }
   }
