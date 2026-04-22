@@ -15,6 +15,7 @@ const USERS_API_URL = /\/api\/users\/?$/.test(API_BASE_URL) ? API_BASE_URL : `${
 const AUTH_ME_URL = `${API_ROOT}/api/auth/me`;
 const AUTH_TOKEN_URL = `${API_ROOT}/api/auth/token`;
 const TOKEN_STORAGE_KEY = "crud_auth_token";
+const TOKEN_EXPIRY_STORAGE_KEY = "crud_auth_token_expires_at";
 const USERS_STORAGE_KEY = "crud_users_data";
 
 const isCrossOriginApi = () => {
@@ -51,6 +52,39 @@ const storeToken = (token) => {
   } catch {
     // localStorage can be unavailable in private or embedded browser contexts.
   }
+};
+
+const getStoredTokenExpiry = () => {
+  try {
+    return Number(window.localStorage.getItem(TOKEN_EXPIRY_STORAGE_KEY) || 0);
+  } catch {
+    return 0;
+  }
+};
+
+const storeTokenExpiry = (expiresAt) => {
+  try {
+    if (expiresAt) {
+      window.localStorage.setItem(TOKEN_EXPIRY_STORAGE_KEY, String(expiresAt));
+    } else {
+      window.localStorage.removeItem(TOKEN_EXPIRY_STORAGE_KEY);
+    }
+  } catch {
+    // localStorage can be unavailable in private or embedded browser contexts.
+  }
+};
+
+const getTokenSecondsRemaining = () => {
+  const expiresAt = getStoredTokenExpiry();
+  if (!expiresAt) return 0;
+  return Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+};
+
+const formatTimeRemaining = (totalSeconds) => {
+  const safeSeconds = Math.max(0, totalSeconds);
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
 };
 
 const getStoredUsers = () => {
@@ -121,6 +155,7 @@ function App() {
   const [passwordForToken, setPasswordForToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [tokenSecondsRemaining, setTokenSecondsRemaining] = useState(getTokenSecondsRemaining);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
 
@@ -132,6 +167,7 @@ function App() {
       setUsers([]);
       setStatus("");
       storeToken("");
+      storeTokenExpiry(0);
       storeUsers([]);
       return true;
     }
@@ -181,6 +217,10 @@ function App() {
       }
 
       storeToken(response.access_token);
+      const expiresIn = Number(response.expires_in || 0);
+      const expiresAt = expiresIn ? Date.now() + expiresIn * 1000 : 0;
+      storeTokenExpiry(expiresAt);
+      setTokenSecondsRemaining(getTokenSecondsRemaining());
       const me = await requestJson(AUTH_ME_URL, isCrossOriginApi()
         ? { method: "POST", body: JSON.stringify({}) }
         : {}
@@ -218,6 +258,27 @@ function App() {
 
     bootstrap();
   }, [loadUsers]);
+
+  useEffect(() => {
+    const updateTokenCountdown = () => {
+      const secondsRemaining = getTokenSecondsRemaining();
+      setTokenSecondsRemaining(secondsRemaining);
+
+      if (getStoredToken() && getStoredTokenExpiry() && secondsRemaining <= 0) {
+        storeToken("");
+        storeTokenExpiry(0);
+        storeUsers([]);
+        setCurrentUser(null);
+        setUsers([]);
+        setStatus("");
+        setError("Your access token expired. Please sign in again.");
+      }
+    };
+
+    updateTokenCountdown();
+    const timerId = window.setInterval(updateTokenCountdown, 1000);
+    return () => window.clearInterval(timerId);
+  }, []);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -390,6 +451,10 @@ function App() {
           </p>
         </div>
         <div className="hero-actions">
+          <div className="token-timer" aria-live="polite">
+            <span>Token expires in</span>
+            <strong>{formatTimeRemaining(tokenSecondsRemaining)}</strong>
+          </div>
           <button className="secondary-button" type="button" onClick={loadUsers} disabled={loading}>
             {loading ? "Refreshing..." : "Refresh data"}
           </button>
@@ -398,6 +463,7 @@ function App() {
             type="button"
             onClick={() => {
               storeToken("");
+              storeTokenExpiry(0);
               storeUsers([]);
               setCurrentUser(null);
               setUsers([]);
