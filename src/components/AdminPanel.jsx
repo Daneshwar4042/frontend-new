@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import "./AdminPanel.css";
 
-const AdminPanel = ({ currentUser, API_ROOT, getStoredToken, handleSessionExpired }) => {
+const AdminPanel = ({ API_ROOT, getStoredToken, handleSessionExpired }) => {
   const [users, setUsers] = useState([]);
   const [activities, setActivities] = useState([]);
   const [activeTab, setActiveTab] = useState("users");
@@ -11,10 +11,10 @@ const AdminPanel = ({ currentUser, API_ROOT, getStoredToken, handleSessionExpire
 
   // Form state for adding user
   const [newUser, setNewUser] = useState({
-    username: "",
+    name: "",
     email: "",
     password: "",
-    role_name: "User"
+    role: "User"
   });
 
   // Fetch users
@@ -24,7 +24,7 @@ const AdminPanel = ({ currentUser, API_ROOT, getStoredToken, handleSessionExpire
 
     try {
       const token = getStoredToken();
-      const response = await fetch(`${API_ROOT}/api/users`, {
+      const response = await fetch(`${API_ROOT}/admin/users`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -49,7 +49,7 @@ const AdminPanel = ({ currentUser, API_ROOT, getStoredToken, handleSessionExpire
         throw requestError;
       }
 
-      const usersArray = Array.isArray(data) ? data : [];
+      const usersArray = data?.data || [];
       setUsers(usersArray);
     } catch (requestError) {
       if (!handleSessionExpired(requestError)) {
@@ -146,7 +146,7 @@ const AdminPanel = ({ currentUser, API_ROOT, getStoredToken, handleSessionExpire
       }
 
       setStatus("User created successfully!");
-      setNewUser({ username: "", email: "", password: "", role_name: "User" });
+      setNewUser({ name: "", email: "", password: "", role: "User" });
       await fetchUsers();
     } catch (requestError) {
       if (!handleSessionExpired(requestError)) {
@@ -241,15 +241,15 @@ const AdminPanel = ({ currentUser, API_ROOT, getStoredToken, handleSessionExpire
 
             <form onSubmit={handleAddUser}>
               <label>
-                <span>Username</span>
-                <input
-                  type="text"
-                  placeholder="john_doe"
-                  value={newUser.username}
-                  onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
-                  required
-                />
-              </label>
+                  <span>Username</span>
+                  <input
+                    type="text"
+                    placeholder="John Doe"
+                    value={newUser.name}
+                    onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+                    required
+                  />
+                </label>
 
               <label>
                 <span>Email</span>
@@ -276,8 +276,8 @@ const AdminPanel = ({ currentUser, API_ROOT, getStoredToken, handleSessionExpire
               <label>
                 <span>Role</span>
                 <select
-                  value={newUser.role_name}
-                  onChange={(e) => setNewUser({ ...newUser, role_name: e.target.value })}
+                  value={newUser.role}
+                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
                 >
                   <option value="User">User</option>
                   <option value="Admin">Admin</option>
@@ -311,11 +311,11 @@ const AdminPanel = ({ currentUser, API_ROOT, getStoredToken, handleSessionExpire
                 </div>
                 {users.map((user) => (
                   <div className="table-row" key={user.ROWID}>
-                    <div className="col-username">{user.username}</div>
+                    <div className="col-username">{user.name}</div>
                     <div className="col-email">{user.email}</div>
                     <div className="col-role">
-                      <span className={`role-badge role-${user.role_name?.toLowerCase()}`}>
-                        {user.role_name || "User"}
+                      <span className={`role-badge role-${user.role?.toLowerCase()}`}>
+                        {user.role || "User"}
                       </span>
                     </div>
                     <div className="col-actions">
@@ -355,7 +355,7 @@ const AdminPanel = ({ currentUser, API_ROOT, getStoredToken, handleSessionExpire
                   <div className="col-login">Login Time</div>
                   <div className="col-logout">Logout Time</div>
                   <div className="col-active">Last Active</div>
-                  <div className="col-status">Status</div>
+                  <div className="col-meta">Role / Created By</div>
                 </div>
                 {activities.map((activity, idx) => (
                   <div className="table-row" key={activity.ROWID || idx}>
@@ -364,10 +364,9 @@ const AdminPanel = ({ currentUser, API_ROOT, getStoredToken, handleSessionExpire
                     <div className="col-login">{formatDate(activity.login_time)}</div>
                     <div className="col-logout">{formatDate(activity.logout_time)}</div>
                     <div className="col-active">{formatDate(activity.last_active)}</div>
-                    <div className="col-status">
-                      <span className={`status-badge status-${activity.session_status?.toLowerCase()}`}>
-                        {activity.session_status || "Unknown"}
-                      </span>
+                    <div className="col-meta">
+                      <strong>{activity.role_name || "User"}</strong>
+                      <span>{activity.created_by || "System"}</span>
                     </div>
                   </div>
                 ))}

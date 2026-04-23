@@ -15,9 +15,12 @@ const API_ROOT = API_BASE_URL.replace(/\/api\/users\/?$/, "");
 const USERS_API_URL = /\/api\/users\/?$/.test(API_BASE_URL) ? API_BASE_URL : `${API_ROOT}/api/users`;
 const AUTH_ME_URL = `${API_ROOT}/api/auth/me`;
 const AUTH_TOKEN_URL = `${API_ROOT}/api/auth/token`;
+const AUTH_ACTIVITY_URL = `${API_ROOT}/api/auth/activity`;
+const AUTH_LOGOUT_URL = `${API_ROOT}/api/auth/logout`;
 const TOKEN_STORAGE_KEY = "crud_auth_token";
 const TOKEN_EXPIRY_STORAGE_KEY = "crud_auth_token_expires_at";
 const USERS_STORAGE_KEY = "crud_users_data";
+const isAdminRole = (roleName = "") => String(roleName).trim().toLowerCase() === "admin";
 
 const isCrossOriginApi = () => {
   try {
@@ -163,18 +166,27 @@ function App() {
 
   const isEditing = Boolean(form.ROWID);
 
+  const clearSession = useCallback(() => {
+    setCurrentUser(null);
+    setUsers([]);
+    setStatus("");
+    setError("");
+    setTokenSecondsRemaining(0);
+    setEmailForToken("");
+    setPasswordForToken("");
+    setShowAdminPanel(false);
+    storeToken("");
+    storeTokenExpiry(0);
+    storeUsers([]);
+  }, []);
+
   const handleSessionExpired = useCallback((requestError) => {
     if (requestError?.status === 401) {
-      setCurrentUser(null);
-      setUsers([]);
-      setStatus("");
-      storeToken("");
-      storeTokenExpiry(0);
-      storeUsers([]);
+      clearSession();
       return true;
     }
     return false;
-  }, []);
+  }, [clearSession]);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -227,12 +239,42 @@ function App() {
         ? { method: "POST", body: JSON.stringify({}) }
         : {}
       );
-      setCurrentUser(me?.user || { email_id: emailForToken.trim(), role_name: "Token User" });
+      setCurrentUser(response?.user || me?.user || { email_id: emailForToken.trim(), role_name: "User" });
       await loadUsers();
     } catch (requestError) {
       setError(requestError.message);
     }
   };
+
+  const sendActivityHeartbeat = useCallback(async () => {
+    if (!getStoredToken()) {
+      return;
+    }
+
+    try {
+      await requestJson(AUTH_ACTIVITY_URL, {
+        method: "POST",
+        body: JSON.stringify({})
+      });
+    } catch (requestError) {
+      handleSessionExpired(requestError);
+    }
+  }, [handleSessionExpired]);
+
+  const handleSignOut = useCallback(async () => {
+    try {
+      if (getStoredToken()) {
+        await requestJson(AUTH_LOGOUT_URL, {
+          method: "POST",
+          body: JSON.stringify({})
+        });
+      }
+    } catch (_requestError) {
+      // Ignore logout errors and clear the client session anyway.
+    } finally {
+      clearSession();
+    }
+  }, [clearSession]);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -248,8 +290,7 @@ function App() {
         await loadUsers();
       } catch (requestError) {
         if (requestError?.status === 401) {
-          setCurrentUser(null);
-          setUsers([]);
+          clearSession();
         } else {
           setError(requestError.message);
         }
@@ -259,7 +300,7 @@ function App() {
     };
 
     bootstrap();
-  }, [loadUsers]);
+  }, [clearSession, loadUsers]);
 
   useEffect(() => {
     const updateTokenCountdown = () => {
@@ -267,12 +308,7 @@ function App() {
       setTokenSecondsRemaining(secondsRemaining);
 
       if (getStoredToken() && getStoredTokenExpiry() && secondsRemaining <= 0) {
-        storeToken("");
-        storeTokenExpiry(0);
-        storeUsers([]);
-        setCurrentUser(null);
-        setUsers([]);
-        setStatus("");
+        clearSession();
         setError("Your access token expired. Please sign in again.");
       }
     };
@@ -281,6 +317,19 @@ function App() {
     const timerId = window.setInterval(updateTokenCountdown, 1000);
     return () => window.clearInterval(timerId);
   }, []);
+
+  useEffect(() => {
+    if (!currentUser) {
+      return undefined;
+    }
+
+    sendActivityHeartbeat();
+    const heartbeatId = window.setInterval(() => {
+      sendActivityHeartbeat();
+    }, 60 * 1000);
+
+    return () => window.clearInterval(heartbeatId);
+  }, [currentUser, sendActivityHeartbeat]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -397,10 +446,10 @@ function App() {
           <div>
             <p className="eyebrow">Token Authentication</p>
             <h1>Sign in to continue</h1>
-            <p className="hero-copy">
-              This CRUD app uses token-based authentication so it can run on Slate while the backend remains on Catalyst.
-              Enter your email to request a short-lived access token, then manage the
-              <code> users </code>
+          <p className="hero-copy">
+            This CRUD app uses token-based authentication so it can run on Slate while the backend remains on Catalyst.
+            Enter your email to request a short-lived access token, then manage the
+              <code> data </code>
               table.
             </p>
             {error && <p className="status error">{error}</p>}
@@ -460,7 +509,7 @@ function App() {
           <button className="secondary-button" type="button" onClick={loadUsers} disabled={loading}>
             {loading ? "Refreshing..." : "Refresh data"}
           </button>
-          {currentUser?.role_name === "Admin" && (
+          {isAdminRole(currentUser?.role_name) && (
             <button
               className={`secondary-button ${showAdminPanel ? "active" : ""}`}
               type="button"
@@ -472,18 +521,7 @@ function App() {
           <button
             className="secondary-button"
             type="button"
-            onClick={() => {
-              storeToken("");
-              storeTokenExpiry(0);
-              storeUsers([]);
-              setCurrentUser(null);
-              setUsers([]);
-              setStatus("");
-              setError("");
-              setEmailForToken("");
-              setPasswordForToken("");
-              setShowAdminPanel(false);
-            }}
+            onClick={handleSignOut}
           >
             Sign out
           </button>
@@ -561,9 +599,8 @@ function App() {
         </section>
       </section>
 
-      {showAdminPanel && currentUser?.role_name === "Admin" && (
+      {showAdminPanel && isAdminRole(currentUser?.role_name) && (
         <AdminPanel
-          currentUser={currentUser}
           API_ROOT={API_ROOT}
           getStoredToken={getStoredToken}
           handleSessionExpired={handleSessionExpired}
