@@ -1,0 +1,348 @@
+.admin-panel {
+  margin-top: 24px;
+}
+
+.admin-tabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0;
+}
+
+.tab-button {
+  padding: 12px 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--muted);
+  transition: all 0.2s ease;
+}
+
+.tab-button:hover {
+  color: var(--heading);
+}
+
+.tab-button.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.admin-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 24px;
+}
+
+@media (max-width: 960px) {
+  .admin-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Add User Panel */
+.add-user-panel {
+  padding: 28px;
+  border-radius: 12px;
+}
+
+.add-user-panel form {
+  display: grid;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.add-user-panel label {
+  display: grid;
+  gap: 8px;
+}
+
+.add-user-panel label span {
+  color: var(--heading);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.add-user-panel input,
+.add-user-panel select {
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: var(--surface);
+  color: var(--heading);
+  font-family: inherit;
+}
+
+.add-user-panel input:focus,
+.add-user-panel select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255, 147, 86, 0.1);
+}
+
+/* Users List Panel */
+.users-list-panel {
+  padding: 28px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.users-table {
+  display: grid;
+  gap: 1px;
+  background: var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 20px;
+}
+
+.table-header,
+.table-row {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 0.8fr 0.6fr;
+  gap: 0;
+  padding: 14px;
+  background: var(--surface);
+  align-items: center;
+}
+
+.table-header {
+  background: rgba(255, 147, 86, 0.08);
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.col-username,
+.col-email,
+.col-role,
+.col-actions {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.col-email {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.role-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.role-admin {
+  background: rgba(220, 38, 38, 0.15);
+  color: #dc2626;
+}
+
+.role-manager {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+}
+
+.role-user {
+  background: rgba(107, 114, 128, 0.15);
+  color: #6b7280;
+}
+
+/* Activity Panel */
+.activity-panel {
+  padding: 28px;
+  border-radius: 12px;
+  grid-column: 1 / -1;
+}
+
+.activity-table {
+  display: grid;
+  gap: 1px;
+  background: var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 20px;
+}
+
+.activity-table .table-header,
+.activity-table .table-row {
+  grid-template-columns: 0.8fr 1.2fr 1.2fr 1.2fr 1.2fr 0.8fr;
+  padding: 12px;
+  font-size: 0.9rem;
+}
+
+.activity-table .table-header {
+  background: rgba(255, 147, 86, 0.08);
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.col-login,
+.col-logout,
+.col-active {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+.col-status {
+  text-align: center;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.status-active {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.status-expired {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+/* Buttons */
+.col-actions button {
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.danger-button {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
+.danger-button:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.danger-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.primary-button {
+  background: var(--accent);
+  color: white;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: #ff9d5c;
+  box-shadow: 0 4px 12px rgba(255, 147, 86, 0.3);
+}
+
+.primary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Status Messages */
+.status {
+  padding: 14px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 0.95rem;
+}
+
+.status.error {
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+  border-left: 4px solid #dc2626;
+}
+
+.status.success {
+  background: rgba(34, 197, 94, 0.12);
+  color: #16a34a;
+  border-left: 4px solid #16a34a;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .activity-table .table-header,
+  .activity-table .table-row {
+    grid-template-columns: 0.8fr 1fr 1fr 1fr 1fr 0.6fr;
+    font-size: 0.8rem;
+  }
+
+  .col-login,
+  .col-logout,
+  .col-active {
+    font-size: 0.75rem;
+  }
+
+  .table-header,
+  .table-row {
+    grid-template-columns: 0.9fr 1.2fr 0.7fr 0.5fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .admin-tabs {
+    gap: 8px;
+  }
+
+  .tab-button {
+    padding: 10px 16px;
+    font-size: 0.9rem;
+  }
+
+  .add-user-panel,
+  .users-list-panel,
+  .activity-panel {
+    padding: 20px;
+  }
+
+  .activity-table .table-header,
+  .activity-table .table-row {
+    grid-template-columns: 0.7fr 0.9fr 0.9fr 0.9fr 0.9fr 0.6fr;
+    font-size: 0.75rem;
+    padding: 10px;
+  }
+
+  .table-header,
+  .table-row {
+    grid-template-columns: 0.8fr 1fr 0.7fr 0.5fr;
+    padding: 12px;
+  }
+
+  .col-login,
+  .col-logout,
+  .col-active {
+    font-size: 0.7rem;
+  }
+}

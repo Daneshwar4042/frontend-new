@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import "./App.css";
+import AdminPanel from "./components/AdminPanel";
 
 const emptyForm = {
   ROWID: "",
@@ -17,6 +18,35 @@ const AUTH_TOKEN_URL = `${API_ROOT}/api/auth/token`;
 const TOKEN_STORAGE_KEY = "crud_auth_token";
 const TOKEN_EXPIRY_STORAGE_KEY = "crud_auth_token_expires_at";
 const USERS_STORAGE_KEY = "crud_users_data";
+const ACTIVITY_ROWID_KEY = "current_activity_rowid";
+
+const logActivity = async (action, userData) => {
+  try {
+    const token = getStoredToken();
+    if (!token) return;
+
+    const response = await fetch(`${API_ROOT}/admin/activity-logs`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        ...userData,
+        action
+      })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data?.rowId) {
+        window.localStorage.setItem(ACTIVITY_ROWID_KEY, data.rowId);
+      }
+    }
+  } catch (err) {
+    // Silently fail - activity logging shouldn't break auth flow
+  }
+};
 
 const isCrossOriginApi = () => {
   try {
@@ -158,6 +188,7 @@ function App() {
   const [tokenSecondsRemaining, setTokenSecondsRemaining] = useState(getTokenSecondsRemaining);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
 
   const isEditing = Boolean(form.ROWID);
 
@@ -226,6 +257,15 @@ function App() {
         : {}
       );
       setCurrentUser(me?.user || { email_id: emailForToken.trim(), role_name: "Token User" });
+      
+      // Log login activity
+      await logActivity("login", {
+        username: me?.user?.username || emailForToken.trim(),
+        email: me?.user?.email_id || emailForToken.trim(),
+        created_by: me?.user?.username || emailForToken.trim(),
+        role_name: me?.user?.role_name || "User"
+      });
+      
       await loadUsers();
     } catch (requestError) {
       setError(requestError.message);
@@ -458,19 +498,48 @@ function App() {
           <button className="secondary-button" type="button" onClick={loadUsers} disabled={loading}>
             {loading ? "Refreshing..." : "Refresh data"}
           </button>
+          {currentUser?.role_name === "Admin" && (
+            <button
+              className={`secondary-button ${showAdminPanel ? "active" : ""}`}
+              type="button"
+              onClick={() => setShowAdminPanel(!showAdminPanel)}
+            >
+              {showAdminPanel ? "Hide Admin Panel" : "Admin Panel"}
+            </button>
+          )}
           <button
             className="secondary-button"
             type="button"
-            onClick={() => {
+            onClick={async () => {
+              // Log logout activity
+              try {
+                const token = getStoredToken();
+                const rowId = window.localStorage.getItem(ACTIVITY_ROWID_KEY);
+                if (token && rowId) {
+                  await fetch(`${API_ROOT}/admin/logout-update`, {
+                    method: "PUT",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Authorization: `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ rowId })
+                  });
+                }
+              } catch (err) {
+                // Silently fail - logout shouldn't be blocked by activity logging
+              }
+
               storeToken("");
               storeTokenExpiry(0);
               storeUsers([]);
+              window.localStorage.removeItem(ACTIVITY_ROWID_KEY);
               setCurrentUser(null);
               setUsers([]);
               setStatus("");
               setError("");
               setEmailForToken("");
               setPasswordForToken("");
+              setShowAdminPanel(false);
             }}
           >
             Sign out
@@ -548,6 +617,15 @@ function App() {
           )}
         </section>
       </section>
+
+      {showAdminPanel && currentUser?.role_name === "Admin" && (
+        <AdminPanel
+          currentUser={currentUser}
+          API_ROOT={API_ROOT}
+          getStoredToken={getStoredToken}
+          handleSessionExpired={handleSessionExpired}
+        />
+      )}
     </main>
   );
 }
